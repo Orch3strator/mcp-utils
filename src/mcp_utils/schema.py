@@ -89,11 +89,21 @@ class CallToolRequest(BaseModel):
     params: dict[str, Any] = Field(...)
 
 
+# class CallToolResult(BaseModel):
+#     """The server's response to a tool call."""
+
+#     _meta: dict[str, Any] | None = None
+#     content: list[TextContent | ImageContent | EmbeddedResource] = Field(...)
+#     is_error: bool = Field(False, alias="isError")
+
+# Mofidied: Added headers field to CallToolResult
+#     headers: dict[str, str] | None = None  # ✨ new field for headers like X-HMAC-Signature
 class CallToolResult(BaseModel):
     """The server's response to a tool call."""
 
     _meta: dict[str, Any] | None = None
     content: list[TextContent | ImageContent | EmbeddedResource] = Field(...)
+    headers: dict[str, str] | None = None  # ✨ new field for headers like X-HMAC-Signature
     is_error: bool = Field(False, alias="isError")
 
 
