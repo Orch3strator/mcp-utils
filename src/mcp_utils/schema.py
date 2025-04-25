@@ -89,6 +89,20 @@ class CallToolRequest(BaseModel):
     params: dict[str, Any] = Field(...)
 
 
+# Modifieed for agent-to-agent communication
+#     agent_id: str = Field(..., description="Identifier of the sending or receiving agent")
+class AgentResource(BaseModel):
+    """Agent-to-Agent structured payload in MCP."""
+
+    agent_id: str = Field(..., description="Identifier of the sending or receiving agent")
+    action: str = Field(..., description="Requested action, e.g., sync_state, report_status")
+    blob: str = Field(..., description="Raw JSON payload serialized as string")
+    object: dict[str, Any] = Field(..., description="Deserialized JSON object for easy access")
+    mime_type: str = Field(default="application/json", alias="mimeType")
+    uri: str = Field(..., description="Unique resource URI for tracking")
+    type: str = Field("agent-resource", const=True, description="Type discriminator for agent resource")
+
+
 # class CallToolResult(BaseModel):
 #     """The server's response to a tool call."""
 
@@ -102,9 +116,11 @@ class CallToolResult(BaseModel):
     """The server's response to a tool call."""
 
     _meta: dict[str, Any] | None = None
-    content: list[TextContent | ImageContent | EmbeddedResource] = Field(...)
-    headers: dict[str, str] | None = None  # ✨ new field for headers like X-HMAC-Signature
+    content: list[TextContent | ImageContent | EmbeddedResource | AgentResource] = Field(...)
+    headers: dict[str, str] | None = None  # ✨ new field for custom security headers
     is_error: bool = Field(False, alias="isError")
+
+
 
 
 class CancelledNotification(BaseModel):
