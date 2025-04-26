@@ -96,8 +96,10 @@ class AgentResource(BaseModel):
 
     agent_id: str = Field(..., description="Identifier of the sending or receiving agent")
     action: str = Field(..., description="Requested action, e.g., sync_state, report_status")
-    blob: str = Field(..., description="Raw JSON payload serialized as string")
-    object: dict[str, Any] = Field(..., description="Deserialized JSON object for easy access")
+    blob: str = Field(..., description="Raw JSON payload serialized as string (unencrypted)")
+    object: dict[str, Any] = Field(..., description="Deserialized JSON object for easy access (if unencrypted)")
+    encrypted_blob: str | None = Field(None, description="Base64-encoded encrypted payload")
+    encryption_algorithm: str | None = Field(None, description="Encryption method used (e.g., AES256-GCM)")
     mime_type: str = Field(default="application/json", alias="mimeType")
     uri: str = Field(..., description="Unique resource URI for tracking")
     type: str = Field("agent-resource", const=True, description="Type discriminator for agent resource")
