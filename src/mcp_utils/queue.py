@@ -4,7 +4,8 @@ Queue implementation for MCP responses
 
 import queue
 import logging
-from collections import defaultdict
+from collections import defaultdict, deque
+from threading import Lock
 from typing import Protocol
 
 from .schema import MCPResponse
@@ -112,24 +113,34 @@ class RedisResponseQueue(ResponseQueueProtocol):
 class InMemoryResponseQueue(ResponseQueueProtocol):
     """
     Synchronous, thread-safe in-memory queue for MCP responses.
-    Each session has its own queue.Queue.
+    Each session has its own queue with a max size of 1000.
+    Oldest responses are dropped if full.
     """
-    def __init__(self):
-        self.queues = defaultdict(queue.Queue)
+    def __init__(self, max_queue_size=1000):
+        # Use deque for fast append/pop and maxlen for auto-drop
+        self.queues = defaultdict(lambda: deque(maxlen=max_queue_size))
+        self.locks = defaultdict(Lock)
+        self.max_queue_size = max_queue_size
 
     def push_response(self, session_id: str, response: MCPResponse) -> None:
-        # Put the response JSON on the queue
-        self.queues[session_id].put(response.model_dump_json(exclude_none=True))
+        with self.locks[session_id]:
+            self.queues[session_id].append(response.model_dump_json(exclude_none=True))
+            # If the queue is full, the oldest is automatically dropped by deque
 
     def wait_for_response(self, session_id: str, timeout: float | None = None) -> str | None:
-        # Block until a response is available, or timeout
-        try:
-            return self.queues[session_id].get(timeout=timeout)
-        except queue.Empty:
-            return None
+        import time
+        deadline = time.time() + timeout if timeout else None
+        while True:
+            with self.locks[session_id]:
+                if self.queues[session_id]:
+                    return self.queues[session_id].popleft()
+            if timeout is not None and time.time() > deadline:
+                return None
+            time.sleep(0.05)  # Avoid busy waiting
 
     def clear_session(self, session_id: str) -> None:
-        # Remove the queue for this session
-        if session_id in self.queues:
-            del self.queues[session_id]
-
+        with self.locks[session_id]:
+            if session_id in self.queues:
+                del self.queues[session_id]
+            if session_id in self.locks:
+                del self.locks[session_id]
