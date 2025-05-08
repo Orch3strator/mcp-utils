@@ -2,7 +2,9 @@
 Queue implementation for MCP responses
 """
 
+import asyncio
 import logging
+from collections import defaultdict
 from typing import Protocol
 
 from .schema import MCPResponse
@@ -106,3 +108,55 @@ class RedisResponseQueue(ResponseQueueProtocol):
         queue_key = self._get_queue_key(session_id)
         self.redis.delete(queue_key)
         logger.debug(f"Redis: Clearing session: {session_id}")
+
+
+class InMemoryResponseQueue(ResponseQueueProtocol):
+    """
+    An in-memory queue implementation for MCP responses.
+    Each session has its own asyncio.Queue.
+    """
+
+    def __init__(self):
+        """
+        Initialize the in-memory queue.
+        Uses a dictionary of asyncio.Queues for session management.
+        """
+        self.queues = defaultdict(asyncio.Queue)
+
+    def push_response(
+        self,
+        session_id: str,
+        response: MCPResponse,
+    ) -> None:
+        """
+        Push a response to the in-memory queue for a specific session.
+        """
+        logger.debug(f"InMemoryQueue: Pushing response for session: {session_id}")
+        queue = self.queues[session_id]
+        asyncio.create_task(queue.put(response.model_dump_json(exclude_none=True)))
+
+    async def wait_for_response(
+        self, session_id: str, timeout: float | None = None
+    ) -> str | None:
+        """
+        Wait for a response from the in-memory queue for a specific session.
+        """
+        queue = self.queues[session_id]
+        try:
+            if timeout is not None:
+                response = await asyncio.wait_for(queue.get(), timeout)
+            else:
+                response = await queue.get()
+            logger.debug(f"InMemoryQueue: Retrieved response for session: {session_id}")
+            return response
+        except asyncio.TimeoutError:
+            logger.warning(f"InMemoryQueue: Timeout waiting for response in session: {session_id}")
+            return None
+
+    def clear_session(self, session_id: str) -> None:
+        """
+        Clear all queued responses for a session.
+        """
+        logger.debug(f"InMemoryQueue: Clearing session: {session_id}")
+        if session_id in self.queues:
+            self.queues[session_id] = asyncio.Queue()
